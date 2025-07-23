@@ -1,7 +1,7 @@
 import { Secp256k1HdWallet } from "@cosmjs/amino";
 import { CreateCapacityDelegationAuthSignatureResult, LitContracts, LitNetwork, LitProtocol, MintCapacityCreditsResult } from "./v6";
 import { DirectSecp256k1HdWallet } from "@cosmjs/proto-signing";
-import { 
+import {
     AbstractCheqdSDKModule,
     CheqdSDK,
     createCheqdSDK,
@@ -32,11 +32,10 @@ const mnemonic = "sketch mountain erode window enact net enrich smoke claim kang
 const address = "cheqd1rnr5jrt4exl0samwj0yegv99jeskl0hsxmcz96"
 const signer = Secp256k1HdWallet.fromMnemonic(mnemonic)
 const cosmosWallet = DirectSecp256k1HdWallet.fromMnemonic(mnemonic, { prefix: 'cheqd' })
-const ethereumWallet = ethers.Wallet.fromPhrase(mnemonic)
-ethereumWallet.connect(new ethers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE))
+const ethereumWallet = ethers.Wallet.fromMnemonic(mnemonic).connect(new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE))
 const paymentConditions = {
     intervalInSeconds: 5 * 60,
-    amount:  `${100}` ,
+    amount: `${100}`,
     toAddress: "cheqd1l9sq0se0jd3vklyrrtjchx4ua47awug5vsyeeh",
     denom: "ncheq"
 }
@@ -96,10 +95,7 @@ async function delegateCapacityCredit(args: {
 
     // delegate capacity credits
     const result = await litProtocol.delegateCapacitCredit({
-        dAppOwnerWallet:
-            ethereumWallet instanceof ethers.Wallet
-                ? ethereumWallet
-                : new ethers.Wallet(ethereumWallet.privateKey),
+        dAppOwnerWallet: ethereumWallet,
         capacityTokenId: args.capacityTokenId,
         delegateeAddresses: args.delegateeAddresses,
         uses: args.uses.toString(),
@@ -123,49 +119,49 @@ async function delegateCapacityCredit(args: {
 }
 
 const createDid = async (keyPair: IKeyPair, feePayer: string, cheqdSDK: CheqdSDK) => {
-  // create verification keys
-  const verificationKeys = createVerificationKeys(
-    keyPair.publicKey,
-    MethodSpecificIdAlgo.Uuid,
-    "key-1"
-  );
+    // create verification keys
+    const verificationKeys = createVerificationKeys(
+        keyPair.publicKey,
+        MethodSpecificIdAlgo.Uuid,
+        "key-1"
+    );
 
-  // create verification methods
-  const verificationMethods = createDidVerificationMethod(
-    [VerificationMethods.Ed255192020],
-    [verificationKeys]
-  );
+    // create verification methods
+    const verificationMethods = createDidVerificationMethod(
+        [VerificationMethods.Ed255192020],
+        [verificationKeys]
+    );
 
-  // create did document
-  const didDocument = createDidPayload(verificationMethods, [verificationKeys]);
+    // create did document
+    const didDocument = createDidPayload(verificationMethods, [verificationKeys]);
 
-  // create sign inputs
-  const signInputs = [
-    {
-      verificationMethodId: didDocument.verificationMethod![0].id as string,
-      privateKeyHex: toString(fromString(keyPair.privateKey, "base64"), "hex"),
-    },
-  ] satisfies ISignInputs[];
+    // create sign inputs
+    const signInputs = [
+        {
+            verificationMethodId: didDocument.verificationMethod![0].id as string,
+            privateKeyHex: toString(fromString(keyPair.privateKey, "base64"), "hex"),
+        },
+    ] satisfies ISignInputs[];
 
-  // define fee amount
-  const fee = await DIDModule.generateCreateDidDocFees(feePayer);
+    // define fee amount
+    const fee = await DIDModule.generateCreateDidDocFees(feePayer);
 
-  // create did
-  const createDidDocResponse = await cheqdSDK.createDidDocTx(
-    signInputs,
-    didDocument,
-    feePayer,
-    undefined,
-    undefined,
-    undefined,
-    { sdk: cheqdSDK }
-  )
+    // create did
+    const createDidDocResponse = await cheqdSDK.createDidDocTx(
+        signInputs,
+        didDocument,
+        feePayer,
+        undefined,
+        undefined,
+        undefined,
+        { sdk: cheqdSDK }
+    )
 
-  console.warn('did document:', JSON.stringify(didDocument, null, 2));
+    console.warn('did document:', JSON.stringify(didDocument, null, 2));
 
-  console.warn('did tx:', JSON.stringify(createDidDocResponse, null, 2));
+    console.warn('did tx:', JSON.stringify(createDidDocResponse, null, 2));
 
-  return didDocument
+    return didDocument
 }
 
 const createEncryptedResource = async (keyPair: IKeyPair, feePayer: string, cheqdSdk: CheqdSDK, didDocument: DIDDocument) => {
@@ -201,7 +197,7 @@ const createEncryptedResource = async (keyPair: IKeyPair, feePayer: string, cheq
         thresholdEncryptionCiphertext,
         'hex'
     )}`;
-    
+
     const payload: Partial<MsgCreateResourcePayload> = {
         collectionId: didDocument.id.split(':')[3],
         id: v4(),
@@ -216,22 +212,22 @@ const createEncryptedResource = async (keyPair: IKeyPair, feePayer: string, cheq
 
     const signInputs = [
         {
-          keyType: 'Ed25519',
-          verificationMethodId: didDocument.verificationMethod![0].id as string,
-          privateKeyHex: toString(fromString(keyPair.privateKey, "base64"), "hex"),
+            keyType: 'Ed25519',
+            verificationMethodId: didDocument.verificationMethod![0].id as string,
+            privateKeyHex: toString(fromString(keyPair.privateKey, "base64"), "hex"),
         },
-      ] satisfies ISignInputs[];
+    ] satisfies ISignInputs[];
 
     const tx = await cheqdSdk.createLinkedResourceTx(signInputs, payload, feePayer, undefined, undefined, { sdk: cheqdSdk })
 
     console.warn('resource tx:', JSON.stringify(tx, null, 2));
-    if(tx.code === 0) {
+    if (tx.code === 0) {
         return payload.id
     }
 }
 
 const decryptResource = async (did: string, resourceId: string) => {
-    const response = await (await fetch(`https://resolver.cheqd.net/1.0/identifiers/${did}/resources/${resourceId}`)).json() as { encoded: string, hash: string, conditions: UnifiedAccessControlConditions} | undefined
+    const response = await (await fetch(`https://resolver.cheqd.net/1.0/identifiers/${did}/resources/${resourceId}`)).json() as { encoded: string, hash: string, conditions: UnifiedAccessControlConditions } | undefined
     if (!response) {
         console.log("Error fetching resource")
         return
@@ -243,12 +239,12 @@ const decryptResource = async (did: string, resourceId: string) => {
     const lit = await instantiateDkgThresholdProtocolClient();
 
     // mint and delegate
-    const mintedRes = await mintCapacityCredit({ effectiveDays: 1 })
+    const mintedRes = await mintCapacityCredit({ effectiveDays: 1, requestsPerKilosecond: 1000 })
 
     const { capacityDelegationAuthSig } = await delegateCapacityCredit({
         capacityTokenId: mintedRes.capacityTokenId,
-		delegateeAddresses: [address],
-		uses: 5
+        delegateeAddresses: [address],
+        uses: 5
     })
 
     const decrypted = await lit.decrypt(
@@ -257,8 +253,8 @@ const decryptResource = async (did: string, resourceId: string) => {
         response.conditions,
         capacityDelegationAuthSig
     )
-    
-   return decrypted
+
+    return decrypted
 }
 
 async function transactSendTokens(cheqdSdk: CheqdSDK): Promise<any> {
@@ -285,7 +281,7 @@ async function transactSendTokens(cheqdSdk: CheqdSDK): Promise<any> {
         fee,
     );
 
-    if(tx.code !== 0){ console.log(`cosmos_transaction: Failed to send tokens. Reason: ${tx.rawLog}`) };
+    if (tx.code !== 0) { console.log(`cosmos_transaction: Failed to send tokens. Reason: ${tx.rawLog}`) };
 
     console.log('Sent tokens', paymentConditions.amount, paymentConditions.denom, 'to', paymentConditions.toAddress);
 
@@ -316,7 +312,7 @@ async function run() {
     const didDocument = await createDid(keyPair, feePayer, sdk)
 
     const result = await createEncryptedResource(keyPair, feePayer, sdk, didDocument)
-    if(!result) {
+    if (!result) {
         console.log("Creating encrypted resource failed")
         return
     }

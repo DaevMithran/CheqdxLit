@@ -194,7 +194,7 @@ export class LitProtocol {
 				},
 			],
 			capabilityAuthSigs: capacityDelegationAuthSig ? [capacityDelegationAuthSig] : undefined,
-			authNeededCallback: async ({}) => {
+			authNeededCallback: async ({ }) => {
 				// generate auth signature
 				const authSig = await LitProtocol.generateAuthSignature(this.cosmosAuthWallet);
 				return authSig;
@@ -449,7 +449,7 @@ export class LitContracts {
 		this.ethereumAuthWallet = options.ethereumAuthWallet;
 
 		// set client
-		this.client = new LitContractsClient({ provider: new ethers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE), signer: this.ethereumAuthWallet, network: this.litNetwork });
+		this.client = new LitContractsClient({ provider: new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE), signer: this.ethereumAuthWallet, network: this.litNetwork });
 	}
 
 	async connect(): Promise<void> {

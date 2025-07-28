@@ -25,6 +25,7 @@ import { LitAccessControlConditionResource } from '@lit-protocol/auth-helpers';
 import { ethers } from 'ethers';
 import { LIT_RPC } from '@lit-protocol/constants';
 import { initWasmBlsSdk } from '@lit-protocol/bls-sdk';
+import { litActionCode } from './litactions';
 
 export type ThresholdEncryptionResult = {
 	encryptedString: Uint8Array;
@@ -40,6 +41,8 @@ export type AuthSignature = {
 	derivedVia: 'cosmos.signArbitrary';
 	signedMessage: string;
 	address: string;
+    algo: string;
+    pubKey: string;
 };
 export type CosmosAuthSignature = {
 	cosmos: AuthSignature;
@@ -184,6 +187,7 @@ export class LitProtocol {
 		unifiedAccessControlConditions: NonNullable<UnifiedAccessControlConditions>,
 		capacityDelegationAuthSig?: GenericAuthSig
 	): Promise<string> {
+        try {
 		// generate session signatures
 		const sessionSigs = await this.client.getSessionSigs({
 			chain: 'cheqd',
@@ -211,6 +215,65 @@ export class LitProtocol {
 		})) satisfies DecryptToStringMethodResult;
 
 		return toString(decryptedData, 'utf-8');
+
+        } catch (error: any) {
+			console.error('Decryption failed:', error);
+			if (error.stack) {
+				console.error('Stack:', error.stack);
+			}
+			// standardize error
+			throw new Error(
+				`[did-provider-cheqd]: lit-protocol: Decryption failed: ${(error as Error).message || error}`
+			);
+		}
+	}
+
+    async decryptV6(
+		encryptedString: string,
+		stringHash: string,
+		unifiedAccessControlConditions: NonNullable<UnifiedAccessControlConditions>,
+        pkpPublicKey: string,
+		capacityDelegationAuthSig?: GenericAuthSig
+	): Promise<string> {
+        try {
+		// generate session signatures
+		const sessionSigs = await this.client.getLitActionSessionSigs({
+			chain: 'cheqd',
+			resourceAbilityRequests: [
+				{
+					resource: new LitAccessControlConditionResource('*'),
+					ability: LitAbility.AccessControlConditionDecryption,
+				},
+			],
+			capabilityAuthSigs: capacityDelegationAuthSig ? [capacityDelegationAuthSig] : undefined,
+            litActionCode: Buffer.from(litActionCode).toString('base64'),
+			jsParams:  await LitProtocol.generateAuthSignature(this.cosmosAuthWallet),
+            pkpPublicKey
+		});
+
+        console.log("Generated sessiong sigs", sessionSigs)
+
+		// decrypt
+		const { decryptedData } = (await this.client.decrypt({
+			chain: this.chain,
+			ciphertext: encryptedString,
+			dataToEncryptHash: stringHash,
+			unifiedAccessControlConditions,
+			sessionSigs,
+		})) satisfies DecryptToStringMethodResult;
+
+		return toString(decryptedData, 'utf-8');
+
+                } catch (error: any) {
+			console.error('Decryption failed:', error);
+			if (error.stack) {
+				console.error('Stack:', error.stack);
+			}
+			// standardize error
+			throw new Error(
+				`[did-provider-cheqd]: lit-protocol: Decryption failed: ${(error as Error).message || error}`
+			);
+		}
 	}
 
 	async delegateCapacitCredit(
@@ -343,6 +406,8 @@ export class LitProtocol {
 		const result = await wallet.signAmino(signerAddress, signDoc);
 		return {
 			address: signerAddress,
+            pubKey: toString((await wallet.getAccounts())[0].pubkey, 'utf-8'),
+            algo: (await wallet.getAccounts())[0].algo,
 			derivedVia: 'cosmos.signArbitrary',
 			sig: result.signature.signature,
 			signedMessage: toString(sha256(new TextEncoder().encode(JSON.stringify(signDoc))), 'hex'), // <-- hex encoded sha256 hash of the json stringified signDoc
@@ -464,6 +529,10 @@ export class LitContracts {
 			daysUntilUTCMidnightExpiration: options.effectiveDays,
 		});
 	}
+
+    async mintPkp() {
+        return (await this.client.pkpNftContractUtils.write.mint()).pkp;
+    }
 
 	static async create(options: Partial<LitContractsOptions>): Promise<LitContracts> {
 		// instantiate underlying ethereum auth wallet

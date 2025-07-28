@@ -55,17 +55,23 @@ async function instantiateDkgThresholdContractClient(): Promise<LitContracts> {
     });
 }
 
-async function mintCapacityCredit(args: {
+async function mintCapacityCreditAndPkp(args: {
     effectiveDays: number;
     requestsPerDay?: number;
     requestsPerSecond?: number;
     requestsPerKilosecond?: number;
-}): Promise<MintCapacityCreditsResult> {
+}): Promise<MintCapacityCreditsResult & { pkp:  {
+                    tokenId: any;
+                    publicKey: string;
+                    ethAddress: string;
+                } }> {
     // instantiate dkg-threshold contract client, in which case lit-protocol is used
     const litContracts = await instantiateDkgThresholdContractClient();
 
     // mint capacity credits
     const result = await litContracts.mintCapacityCredits(args);
+
+    const pkp = await litContracts.mintPkp();
 
     // keep log
     console.log(
@@ -77,10 +83,12 @@ async function mintCapacityCredit(args: {
         'with transaction hash',
         result.rliTxHash,
         'from address',
-        ethereumWallet.address
+        ethereumWallet.address,
+        'pkp',
+        pkp,
     );
 
-    return result;
+    return { ...result, pkp };
 }
 
 async function delegateCapacityCredit(args: {
@@ -239,7 +247,7 @@ const decryptResource = async (did: string, resourceId: string) => {
     const lit = await instantiateDkgThresholdProtocolClient();
 
     // mint and delegate
-    const mintedRes = await mintCapacityCredit({ effectiveDays: 1, requestsPerKilosecond: 1000 })
+    const mintedRes = await mintCapacityCreditAndPkp({ effectiveDays: 1, requestsPerKilosecond: 1000 })
 
     const { capacityDelegationAuthSig } = await delegateCapacityCredit({
         capacityTokenId: mintedRes.capacityTokenId,
@@ -247,10 +255,11 @@ const decryptResource = async (did: string, resourceId: string) => {
         uses: 5
     })
 
-    const decrypted = await lit.decrypt(
+    const decrypted = await lit.decryptV6(
         thresholdEncryptionCiphertext,
         response.hash,
         response.conditions,
+        mintedRes.pkp.publicKey,
         capacityDelegationAuthSig
     )
 

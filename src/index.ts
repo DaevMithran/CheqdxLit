@@ -34,7 +34,7 @@ const signer = Secp256k1HdWallet.fromMnemonic(mnemonic)
 const cosmosWallet = DirectSecp256k1HdWallet.fromMnemonic(mnemonic, { prefix: 'cheqd' })
 const ethereumWallet = ethers.Wallet.fromMnemonic(mnemonic).connect(new ethers.providers.JsonRpcProvider(LIT_RPC.CHRONICLE_YELLOWSTONE))
 const paymentConditions = {
-    intervalInSeconds: 5 * 60,
+    intervalInSeconds: 500 * 60,
     amount: `${100}`,
     toAddress: "cheqd1l9sq0se0jd3vklyrrtjchx4ua47awug5vsyeeh",
     denom: "ncheq"
@@ -255,11 +255,10 @@ const decryptResource = async (did: string, resourceId: string) => {
         uses: 5
     })
 
-    const decrypted = await lit.decryptV6(
+    const decrypted = await lit.decrypt(
         thresholdEncryptionCiphertext,
         response.hash,
         response.conditions,
-        mintedRes.pkp.publicKey,
         capacityDelegationAuthSig
     )
 

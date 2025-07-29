@@ -21,11 +21,12 @@ import { isBrowser, isNode } from './utils/env';
 import { v4 } from 'uuid';
 import { fromString } from 'uint8arrays';
 import { LitProtocolDebugEnabled } from './utils/constants';
-import { LitAccessControlConditionResource } from '@lit-protocol/auth-helpers';
+import { LitAccessControlConditionResource, LitActionResource, LitPKPResource } from '@lit-protocol/auth-helpers';
 import { ethers } from 'ethers';
-import { LIT_RPC } from '@lit-protocol/constants';
+import { AuthMethodScope, AuthMethodType, LIT_RPC } from '@lit-protocol/constants';
 import { initWasmBlsSdk } from '@lit-protocol/bls-sdk';
 import { litActionCode } from './litactions';
+import ipfsOnlyHash from "typestub-ipfs-only-hash";
 
 export type ThresholdEncryptionResult = {
 	encryptedString: Uint8Array;
@@ -210,7 +211,7 @@ export class LitProtocol {
 			chain: this.chain,
 			ciphertext: encryptedString,
 			dataToEncryptHash: stringHash,
-			unifiedAccessControlConditions,
+			unifiedAccessControlConditions: [unifiedAccessControlConditions],
 			sessionSigs,
 		})) satisfies DecryptToStringMethodResult;
 
@@ -530,9 +531,67 @@ export class LitContracts {
 		});
 	}
 
-    async mintPkp() {
-        return (await this.client.pkpNftContractUtils.write.mint()).pkp;
+    async calculateLitActionCodeCID(input: string): Promise<string> {
+    try {
+        const cid = await ipfsOnlyHash.of(input);
+        return cid;
+    } catch (error) {
+        console.error("Error calculating CID for litActionCode:", error);
+        throw error;
     }
+    }
+
+
+    async mintPkp() {
+        const authMethodType = ethers.utils.keccak256(
+            // should be unique
+            ethers.utils.toUtf8Bytes("Lit Cheqd Cosmos Authentication")
+        );
+        
+        const authMethodId = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(`cheqd:lit`)
+        );
+    
+        const tx = await this.client.pkpHelperContractUtil.write.mintNextAndAddAuthMethods({
+            permittedAuthMethodIds: [ `0x${Buffer.from(
+                ethers.utils.base58.decode(
+                    await this.calculateLitActionCodeCID(litActionCode)
+                )
+        ).toString("hex")}`, authMethodId],
+            permittedAuthMethodTypes: [ AuthMethodType.LitAction.toString(), authMethodType],
+            permittedAuthMethodScopes: [ [ AuthMethodScope.SignAnything.toString() ], [ AuthMethodScope.NoPermissions.toString() ] ],
+            keyType: AuthMethodType.LitAction.toString(),
+            sendPkpToItself: false,
+            addPkpEthAddressAsPermittedAddress: true,
+            permittedAuthMethodPubkeys: ["0x", "0x"]
+        });
+
+        const receipt = await tx.wait()
+
+        return await this.getPkpInfoFromMintReceipt(receipt)
+    }
+
+    async getPkpInfoFromMintReceipt (
+        txReceipt: ethers.ContractReceipt,
+    ) {
+        const pkpMintedEvent = txReceipt!.events!.find(
+            (event) =>
+            event.topics[0] ===
+            "0x3b2cc0657d0387a736293d66389f78e4c8025e413c7a1ee67b7707d4418c46b8"
+        );
+
+        const publicKey = "0x" + pkpMintedEvent!.data.slice(130, 260);
+        const tokenId = ethers.utils.keccak256(publicKey);
+        const ethAddress = await this.client.pkpNftContract.read.getEthAddress(
+            tokenId
+        );
+
+        return {
+            tokenId: ethers.BigNumber.from(tokenId).toString(),
+            publicKey,
+            ethAddress,
+        };
+};
 
 	static async create(options: Partial<LitContractsOptions>): Promise<LitContracts> {
 		// instantiate underlying ethereum auth wallet

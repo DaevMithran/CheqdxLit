@@ -212,7 +212,7 @@ const createEncryptedResource = async (keyPair: IKeyPair, feePayer: string, cheq
         data: fromString(JSON.stringify({
             encoded,
             hash: stringHash,
-            conditions: paymentConditions
+            conditions: unifiedAccessControlConditions
         }), 'utf-8'),
         name: 'encrypted',
         resourceType: 'encrypted'
@@ -247,7 +247,7 @@ const decryptResource = async (did: string, resourceId: string) => {
     const lit = await instantiateDkgThresholdProtocolClient();
 
     // mint and delegate
-    const mintedRes = await mintCapacityCreditAndPkp({ effectiveDays: 1, requestsPerKilosecond: 1000 })
+    const mintedRes = await mintCapacityCreditAndPkp({ effectiveDays: 1, requestsPerKilosecond: 10 })
 
     const { capacityDelegationAuthSig } = await delegateCapacityCredit({
         capacityTokenId: mintedRes.capacityTokenId,
@@ -330,7 +330,7 @@ async function run() {
     await transactSendTokens(sdk)
     console.log("Transfer complete")
 
-    const decrypted = await decryptResource("did:cheqd:testnet:418df027-081d-4748-9b44-085739b97067", "0561742a-e014-4734-900f-71fed6cb408b")
+    const decrypted = await decryptResource(didDocument.id, result)
     console.log("Decrypted Resource", decrypted)
 }
 

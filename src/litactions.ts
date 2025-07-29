@@ -1,5 +1,5 @@
 const _litActionCode = `async () => {
-    LitActions.setResponse({ response: "true" })
+      return Lit.Actions.setResponse({ response: "true" });
  }`
 
-export const litActionCode = `${_litActionCode}();`
+export const litActionCode = `(${_litActionCode})();`
